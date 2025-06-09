@@ -1,5 +1,4 @@
 // js/utils.js
-//エスケープ処理です。
 export function escapeHtml(unsafe) {
     if (typeof unsafe !== 'string') return '';
     return unsafe

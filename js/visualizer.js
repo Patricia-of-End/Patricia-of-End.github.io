@@ -1,4 +1,3 @@
-// js/visualizer.js
 import * as dom from './domElements.js';
 import { setErrorMessage } from './utils.js';
 
@@ -20,7 +19,7 @@ let currentTone = { bass: 0, treble: 0 };
 let stereo_splitter = null;
 let stereo_merger = null;
 let stereo_delay = null;
-let currentStereoDelay = 0;
+let currentStereoDelay = 0; // この変数は、main.jsからのsetStereoWidthで更新されるdelayTimeの値を持つことになる
 
 let reverbNode = null;
 let preDelayNode = null;
@@ -59,8 +58,13 @@ function createAudioGraph(audioElement) {
     
     stereo_splitter = audioContext.createChannelSplitter(2);
     stereo_merger = audioContext.createChannelMerger(2);
-    stereo_delay = audioContext.createDelay(0.1);
-    setStereoWidth(currentStereoDelay);
+    stereo_delay = audioContext.createDelay(0.1); // stereo_delayノードを作成
+    // ★ここを変更します！
+    // setStereoWidth(currentStereoDelay); // この行は削除またはコメントアウト
+    // currentStereoDelay は既に setStereoWidth で正しい値に設定されているはずなので、
+    // それを新しい stereo_delay ノードの delayTime に直接設定します。
+    stereo_delay.delayTime.value = currentStereoDelay;
+
 
     vocalCut_splitter = audioContext.createChannelSplitter(2);
     vocalCut_inverter = audioContext.createGain(); vocalCut_inverter.gain.value = -1;
