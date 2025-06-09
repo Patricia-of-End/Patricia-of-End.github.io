@@ -52,7 +52,7 @@ Safariでも動作する可能性がありますが、上記のブラウザで�
 
 このプレイヤーはHTMLファイルとJavaScriptファイルで構成されているため、ブラウザで直接開くことは可能です。しかし、ブラウザのセキュリティ機能（**CORS: Cross-Origin Resource Sharing**）の制約により、**ローカル環境でウェブサーバーを立ててアクセスすることを強く推奨します。**これは、`jsmediatags` による音声ファイルのメタデータ読み込みなど、一部の機能が `file://` アドレス（直接ファイルを開いた場合）では正しく機能しないためです。
 
-1.  **リポジトリをクローンする**:
+1.  **リポジリトをクローンする**:
     ```bash
     git clone [https://github.com/Patricia-of-End/Patricia-of-End.github.io.git](https://github.com/Patricia-of-End/Patricia-of-End.github.io.git)
     cd Patricia-of-End/Patricia-of-End.github.io
@@ -67,7 +67,7 @@ Safariでも動作する可能性がありますが、上記のブラウザで�
 
 ### 開発環境
 
-* **推奨エディタ**: [Visual Studio Code (VS Code)](https://code.visualstudio.com/)
+* **推奨エディタ**: [Visual Studio Code (VS Code)](https://code.visualstudio.com/)、[Notepad++](https://notepad-plus-plus.org/)
 * **簡易サーバー**: VS Codeの拡張機能「**Live Server**」を使用すると、簡単にローカルウェブサーバーを起動できます。
     1.  VS CodeにLive Server拡張機能をインストールします。
     2.  VS Codeでこのプロジェクトのフォルダを開きます。
@@ -109,6 +109,13 @@ Safariでも動作する可能性がありますが、上記のブラウザで�
 * **Chromeの拡張機能を利用する**:
     Chromeウェブストアには「**CORS Unblock**」や「**Allow CORS: Access-Control-Allow-Origin**」といった拡張機能があります。これらをインストールし、必要な時だけ有効にすることでCORS制約を一時的に解除できます。
     **注意**: これらの拡張機能はブラウザのセキュリティを弱めるため、使用は自己責任でお願いします。
+
+---
+
+## 🔗 デモ / ライブサイト
+
+実際に動作するプレイヤーはこちらからアクセスできます:
+[ローカルメディアプレイヤー デモ](https://patricia-of-end.github.io/)
 
 ---
 
