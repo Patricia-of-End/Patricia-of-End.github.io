@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>社会信用テスト</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        /* Inter font applied */
+        body {
+            font-family: 'Inter', sans-serif;
+            /* 中国国旗を背景に設定 */
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg');
+            background-size: cover; /* 画面全体を覆うように拡大 */
+            background-position: center; /* 中央に配置 */
+            background-repeat: no-repeat; /* 繰り返しなし */
+            background-attachment: fixed; /* スクロールしても背景を固定 */
+        }
+        /* Score change text animation for decreases (this is now mostly replaced by overlays) */
+        @keyframes fade-and-move-up {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-80px);
+            }
+        }
+        .animate-fade-and-move-up {
+            animation: fade-and-move-up 1.8s forwards; /* アニメーション時間を1.8秒に延長 */
+        }
+
+        /* Screen display/hide utilities */
+        .screen {
+            display: none;
+            /* 半透明の黒いオーバーレイを追加して、背景の旗を見えやすくする */
+            background-color: rgba(0, 0, 0, 0.6); /* Adjust opacity as needed */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1; /* Ensure screens are above the background but below overlays */
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* Extreme penalty image overlay specific styles */
+        #extremePenaltyOverlay {
+            background-color: red; /* Matching the background of the provided image */
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100; /* Ensure it's on top */
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+        }
+        #extremePenaltyOverlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        #extremePenaltyImage {
+            max-width: 90%; /* Ensure it's responsive */
+            height: auto;
+            border-radius: 8px; /* Slightly rounded corners */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Dangerous Thought Overlay styles */
+        #dangerousThoughtOverlay {
+            background-color: red; /* Matching the background of the provided image */
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 101; /* Higher z-index than extremePenaltyOverlay */
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+        }
+        #dangerousThoughtOverlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        #dangerousThoughtText2 {
+            color: lime; /* Green text */
+            font-size: 7rem; /* Even larger font size */
+            font-weight: bolder;
+            text-shadow: 0 0 15px rgba(0, 255, 0, 0.8); /* Green glow */
+            animation: blink 0.7s infinite alternate; /* Blinking animation */
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+
+        /* Positive Change Overlay styles */
+        #positiveChangeOverlay {
+            background-color: #e04433; /* Red background from the image */
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 99; /* Below extreme but above screens */
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+            color: white; /* Default text color */
+        }
+        #positiveChangeOverlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        #positiveArrow {
+            font-size: 15rem; /* Large green arrow */
+            color: limegreen;
+            line-height: 1; /* Remove extra space above/below emoji */
+        }
+        #positiveCreditText {
+            font-size: 6rem; /* Large text for +X Social Credit */
+            font-weight: bold;
+            margin-top: 1rem;
+            line-height: 1;
+        }
+        #positiveChineseText {
+            font-size: 6rem; /* Large text for "做得好" */
+            font-weight: bold;
+            margin-top: 2rem;
+            line-height: 1;
+        }
+        #positiveEmoji {
+            font-size: 10rem; /* Large emoji */
+            line-height: 1;
+            margin-top: 2rem;
+        }
+
+        /* Negative Change Overlay styles (NEW) */
+        #negativeChangeOverlay {
+            background-color: #a00000; /* Darker red for negative */
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 99; /* Same as positive change */
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+            color: white;
+        }
+        #negativeChangeOverlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        #negativeArrow {
+            font-size: 15rem; /* Large red arrow */
+            color: #ff3333; /* Bright red */
+            line-height: 1;
+        }
+        #negativeCreditText {
+            font-size: 6rem; /* Large text for -X Social Credit */
+            font-weight: bold;
+            margin-top: 1rem;
+            line-height: 1;
+        }
+        #negativeChineseText {
+            font-size: 6rem; /* Large text for "差评" */
+            font-weight: bold;
+            margin-top: 2rem;
+            line-height: 1;
+        }
+        #negativeEmoji {
+            font-size: 10rem; /* Large emoji */
+            line-height: 1;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body class="text-white flex items-center justify-center min-h-screen overflow-hidden p-4">
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen active flex-col items-center justify-center text-center">
+        <h1 class="text-6xl sm:text-7xl md:text-8xl font-bold mb-8 text-gray-300 tracking-wider uppercase">
+            Chinese social credit <br> Test
+        </h1>
+        <div class="flex space-x-8 mb-12">
+            <span class="text-[8rem] leading-none">👲</span>
+            <span class="text-[8rem] leading-none">👲</span>
+        </div>
+        <button id="startButton" class="bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 px-12 rounded-lg shadow-xl transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-opacity-75 text-4xl">
+            ＜Start＞
+        </button>
+    </div>
+
+    <!-- Question Screen -->
+    <div id="questionScreen" class="screen flex-col items-center justify-center text-center max-w-3xl w-full">
+        <p class="text-2xl mb-4 text-gray-400">問題 <span id="currentQuestionNumber">1</span> / <span id="totalQuestions"></span></p>
+        <h2 id="questionText" class="text-4xl sm:text-5xl md:text-6xl font-bold mb-12 text-gray-300">
+            問題文がここに表示されます。
+        </h2>
+        <div id="answersContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full px-4">
+            </div>
+        <div class="mt-8 text-2xl text-gray-400">
+            現在のスコア: <span id="currentSocialCredit">800</span>
+        </div>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="resultScreen" class="screen flex-col items-center justify-center text-center">
+        <h2 class="text-6xl sm:text-7xl md:text-8xl font-bold mb-8 text-gray-300 tracking-wider uppercase">
+            テスト結果
+        </h2>
+        <p class="text-4xl sm:text-5xl md:text-6xl font-bold mb-4">
+            最終スコア: <span id="finalSocialCredit" class="text-green-500">800</span>
+        </p>
+        <p id="resultMessage" class="text-3xl mb-12 text-gray-400">
+            素晴らしい結果でした！
+        </p>
+        <button id="restartButton" class="bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 px-8 rounded-lg shadow-xl transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:ring-opacity-75 text-3xl">
+            もう一度プレイ
+        </button>
+    </div>
+
+    <!-- Credit Change Overlay (Animated text, only for decreases, but now largely replaced) -->
+    <div id="creditChangeOverlay" class="absolute inset-0 flex items-center justify-center pointer-events-none z-50 opacity-0 transition-opacity duration-300">
+        <p id="creditChangeText" class="text-7xl font-bold text-green-400 opacity-0"></p>
+    </div>
+
+    <!-- Extreme Penalty Image Overlay -->
+    <div id="extremePenaltyOverlay" class="screen">
+        <img id="extremePenaltyImage" src="https://placehold.co/600x400/FF0000/FFFFFF?text=-100,000,000,000%0ASocial%20Credit%0A%0A%F0%9F%91%87" alt="Extreme Social Credit Penalty">
+    </div>
+
+    <!-- Dangerous Thought Overlay -->
+    <div id="dangerousThoughtOverlay" class="screen">
+        <p id="dangerousThoughtText2">我入手危険思想！！！</p>
+    </div>
+
+    <!-- Positive Change Overlay -->
+    <div id="positiveChangeOverlay" class="screen">
+        <span id="positiveArrow">⬆️</span>
+        <p id="positiveCreditText"></p>
+        <p id="positiveChineseText">做得好</p>
+        <span id="positiveEmoji">👍</span>
+    </div>
+
+    <!-- Negative Change Overlay (NEW) -->
+    <div id="negativeChangeOverlay" class="screen">
+        <span id="negativeArrow">⬇️</span>
+        <p id="negativeCreditText"></p>
+        <p id="negativeChineseText">差评</p>
+        <span id="negativeEmoji">✖️</span>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const startScreen = document.getElementById('startScreen');
+        const questionScreen = document.getElementById('questionScreen');
+        const resultScreen = document.getElementById('resultScreen');
+
+        const startButton = document.getElementById('startButton');
+        const currentQuestionNumberElement = document.getElementById('currentQuestionNumber');
+        const totalQuestionsElement = document.getElementById('totalQuestions');
+        const questionTextElement = document.getElementById('questionText');
+        const answersContainer = document.getElementById('answersContainer');
+        const currentSocialCreditElement = document.getElementById('currentSocialCredit');
+
+        const finalSocialCreditElement = document.getElementById('finalSocialCredit');
+        const resultMessageElement = document.getElementById('resultMessage');
+        const restartButton = document.getElementById('restartButton');
+
+        const creditChangeOverlay = document.getElementById('creditChangeOverlay'); // For text decreases, now less used
+        const creditChangeTextElement = document.getElementById('creditChangeText');
+        const extremePenaltyOverlay = document.getElementById('extremePenaltyOverlay');
+        const extremePenaltyImage = document.getElementById('extremePenaltyImage');
+        const dangerousThoughtOverlay = document.getElementById('dangerousThoughtOverlay');
+
+        // Elements for positive change overlay
+        const positiveChangeOverlay = document.getElementById('positiveChangeOverlay');
+        const positiveCreditTextElement = document.getElementById('positiveCreditText');
+
+        // Elements for negative change overlay (NEW)
+        const negativeChangeOverlay = document.getElementById('negativeChangeOverlay');
+        const negativeCreditTextElement = document.getElementById('negativeCreditText');
+
+
+        // Game data
+        const questions = [
+            {
+                question: "How Many hours Do you play Games?",
+                options: ["1) 2 hours", "2) 3 hours", "3) 1 hour", "4) 1 hour less"],
+                correctAnswerIndex: 3, // "4) 1 hour less" is the correct answer for social credit
+                creditChange: { correct: 15, incorrect: -15 } // Adjusted to +15 as per video
+            },
+            {
+                question: "Which is Better?",
+                options: ["America", "China"],
+                correctAnswerIndex: 1, // "China" is the correct answer for social credit
+                creditChange: { correct: 50, incorrect: -100 } // Significant penalty for incorrect answer
+            },
+            {
+                question: "How many kids do you have?", // 新しい問題
+                options: ["1) 4", "2) 1", "3) 5", "4) 2"],
+                correctAnswerIndex: 1, // "2) 1" (一人っ子政策を考慮)
+                creditChange: { correct: 30, incorrect: -50 } // 適度な増減
+            },
+            {
+                question: "What happened in the tiananmen Square on June 4, 1989?",
+                options: ["1) nothing", "2) Something", "3) What happened?", "4) i forgot"],
+                correctAnswerIndex: 0, // "1) nothing" is the correct answer for social credit
+                // Default incorrect penalty for this question (not "Something")
+                creditChange: {
+                    correct: 100,
+                    incorrect: -500, // Reasonable penalty for other incorrect answers on this question
+                    // Special penalty for selecting "Something"
+                    somethingPenalty: -1000000000000000000000 // Extremely large
+                }
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let socialCredit = 800; // Initial score
+
+        // Tone.js settings
+        // Positive sound (bell-like tone)
+        const bellSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "sine" },
+            envelope: {
+                attack: 0.01,
+                decay: 0.2,
+                sustain: 0.05,
+                release: 0.5
+            },
+            volume: 0 // 音量を最大に調整
+        }).toDestination();
+
+        // Alert sound from local MP3 file
+        // IMPORTANT: Ensure fx.mp3 is in an 'audio' folder next to your HTML file
+        const alertPlayer = new Tone.Player({
+            url: "./audio/fx.mp3",
+            volume: 10 // 音量をさらに大きく調整
+        }).toDestination();
+
+        // Background Music from local MP3 file
+        // IMPORTANT: Ensure bgm.mp3 is in an 'audio' folder next to your HTML file
+        const bgmPlayer = new Tone.Player({
+            url: "./audio/bgm.mp3",
+            loop: true, // Loop the background music
+            volume: 0 // 音量をさらに大きく調整（最大音量）
+        }).toDestination();
+
+        // Result screen music from local MP3 file
+        // IMPORTANT: Ensure fin.mp3 is in an 'audio' folder next to your HTML file
+        const finPlayer = new Tone.Player({
+            url: "./audio/fin.mp3",
+            volume: 0 // 音量を最大に調整
+        }).toDestination();
+
+        // ネガティブな音 (fx.mp3以外の場合)
+        const wompSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "sawtooth" },
+            envelope: {
+                attack: 0.05,
+                decay: 0.4,
+                sustain: 0.1,
+                release: 0.8
+            },
+            volume: -10 // 音量を調整
+        }).toDestination();
+
+        /**
+         * Play positive sound
+         */
+        async function playBellSound() {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            bellSynth.triggerAttackRelease(["C5", "E5", "G5"], "0.3");
+        }
+
+        /**
+         * Play alert sound from MP3
+         */
+        async function playAlertSound() {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            // Check if the player is loaded and not already playing
+            if (alertPlayer.loaded && alertPlayer.state === "stopped") {
+                alertPlayer.start();
+            } else if (!alertPlayer.loaded) {
+                console.warn("fx.mp3 could not be loaded. Please ensure the file exists at ./audio/fx.mp3");
+            }
+        }
+
+        /**
+         * Play generic negative sound
+         */
+        async function playWompSound() {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            wompSynth.triggerAttackRelease("C2", "0.5");
+        }
+
+        /**
+         * Start playing background music
+         */
+        async function startBGM() {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            if (bgmPlayer.loaded && bgmPlayer.state !== "started") {
+                // BGMを4秒目から再生
+                bgmPlayer.start(Tone.now(), 4);
+            } else if (!bgmPlayer.loaded) {
+                console.warn("bgm.mp3 could not be loaded. Please ensure the file exists at ./audio/bgm.mp3");
+            }
+        }
+
+        /**
+         * Stop playing background music
+         */
+        function stopBGM() {
+            if (bgmPlayer.state === "started") {
+                bgmPlayer.stop();
+            }
+        }
+
+        /**
+         * Start playing final music
+         */
+        async function playFinMusic() {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            if (finPlayer.loaded && finPlayer.state === "stopped") {
+                finPlayer.start();
+            } else if (!finPlayer.loaded) {
+                console.warn("fin.mp3 could not be loaded. Please ensure the file exists at ./audio/fin.mp3");
+            }
+        }
+
+        /**
+         * Stop playing final music
+         */
+        function stopFinMusic() {
+            if (finPlayer.state === "started") {
+                finPlayer.stop();
+            }
+        }
+
+        /**
+         * Show specified screen and hide others
+         * @param {HTMLElement} screenToShow Screen element to display
+         */
+        function showScreen(screenToShow) {
+            const screens = [startScreen, questionScreen, resultScreen, extremePenaltyOverlay, dangerousThoughtOverlay, positiveChangeOverlay, negativeChangeOverlay]; // Add negativeChangeOverlay
+            screens.forEach(screen => {
+                screen.classList.remove('active');
+            });
+            screenToShow.classList.add('active');
+        }
+
+        /**
+         * Start the game
+         */
+        function startGame() {
+            socialCredit = 800; // Reset score
+            currentQuestionIndex = 0; // Reset question index
+            currentSocialCreditElement.textContent = socialCredit; // Display initial score
+            totalQuestionsElement.textContent = questions.length; // Display total questions
+            displayQuestion(); // Display the first question
+            showScreen(questionScreen); // Switch to question screen
+            stopFinMusic(); // Ensure fin.mp3 is stopped if restarting
+            startBGM(); // Start background music
+        }
+
+        /**
+         * Display the current question
+         */
+        function displayQuestion() {
+            if (currentQuestionIndex < questions.length) {
+                const question = questions[currentQuestionIndex];
+                currentQuestionNumberElement.textContent = currentQuestionIndex + 1;
+                questionTextElement.textContent = question.question;
+                answersContainer.innerHTML = ''; // Clear previous options
+
+                question.options.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = option;
+                    button.className = `bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg transform transition duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75 text-2xl`;
+                    button.onclick = () => selectAnswer(index);
+                    answersContainer.appendChild(button);
+                });
+            } else {
+                showResult(); // Show result screen if all questions are answered
+            }
+        }
+
+        /**
+         * Handle answer selection
+         * @param {number} selectedIndex Index of the selected option
+         */
+        function selectAnswer(selectedIndex) {
+            const question = questions[currentQuestionIndex];
+            const isCorrect = (selectedIndex === question.correctAnswerIndex);
+            let creditChangeAmount;
+
+            // 最終問題かつ「Something」を選択した場合 (selectedIndex === 1)
+            if (currentQuestionIndex === questions.length - 1 && selectedIndex === 1) {
+                creditChangeAmount = question.creditChange.somethingPenalty; // 極端なペナルティを適用
+                playAlertSound(); // fx.mp3 (アラート音)
+                stopBGM(); // BGMを停止
+
+                // 危険思想の警告画面を表示し、一定時間後にExtremePenaltyImageを表示
+                showScreen(dangerousThoughtOverlay);
+                setTimeout(() => {
+                    showExtremePenaltyImage(); // Extreme Penalty Imageを表示
+                }, 2000); // 危険思想の警告を2秒間表示
+
+                // Extreme Penalty Image表示後、さらに一定時間経ってから結果画面へ
+                setTimeout(() => {
+                    socialCredit += creditChangeAmount; // スコアを更新
+                    currentSocialCreditElement.textContent = socialCredit.toLocaleString();
+                    currentQuestionIndex++; // 次の質問（結果）へ
+                    displayQuestion(); // 結果画面へ移行
+                }, 4000); // 危険思想警告2秒 + Penalty画像2秒 = 4秒後に次の画面へ
+            } else if (isCorrect) {
+                creditChangeAmount = question.creditChange.correct;
+                playBellSound();
+                // 新しいポジティブなスコア変化エフェクトを表示
+                showPositiveChangeImage(creditChangeAmount);
+                // Move to next question after positive animation
+                setTimeout(() => {
+                    positiveChangeOverlay.classList.remove('active'); // ポジティブオーバーレイを非表示にする
+                    socialCredit += creditChangeAmount; // スコアを更新
+                    currentSocialCreditElement.textContent = socialCredit.toLocaleString();
+                    currentQuestionIndex++;
+                    // 次の質問を表示するか、結果画面へ
+                    if (currentQuestionIndex < questions.length) {
+                        showScreen(questionScreen); // 質問画面をアクティブにする
+                        displayQuestion();
+                    } else {
+                        showResult();
+                    }
+                }, 2500); // 演出の表示時間を考慮 (例: 2.5秒)
+            } else { // 最後の問題以外で不正解、または最後の問題で「Something」以外が不正解
+                creditChangeAmount = question.creditChange.incorrect; // 通常の不正解ペナルティ
+                playWompSound(); // 通常の不正解音
+                // 新しいネガティブなスコア変化エフェクトを表示
+                showNegativeChangeImage(creditChangeAmount); // NEW: Show negative change overlay
+                // Move to next question or result screen
+                setTimeout(() => {
+                    negativeChangeOverlay.classList.remove('active'); // ネガティブオーバーレイを非表示にする
+                    socialCredit += creditChangeAmount; // スコアを更新
+                    currentSocialCreditElement.textContent = socialCredit.toLocaleString();
+                    currentQuestionIndex++;
+                    // 次の質問を表示するか、結果画面へ
+                    if (currentQuestionIndex < questions.length) {
+                        showScreen(questionScreen); // 質問画面をアクティブにする
+                        displayQuestion();
+                    } else {
+                        showResult();
+                    }
+                }, 2500); // ポジティブな演出と同じ時間で設定 (例: 2.5秒)
+            }
+
+            // Note: socialCreditの更新は、特別なケース（最後の問題で不正解）以外は即座に行われる
+            // Positive change logic now updates score after animation
+            if (!(currentQuestionIndex === questions.length - 1 && selectedIndex === 1) && !isCorrect) {
+                // Score is updated inside the setTimeout for overlays, so remove immediate update here for those cases
+                // For non-overlay changes (if animateCreditChange was still used for text), it would be here.
+                // But now all correct/incorrect goes through an overlay or special sequence.
+            }
+        }
+
+        /**
+         * Display score change animation (text) for decreases (this is now largely replaced by showNegativeChangeImage)
+         * @param {number} amount Score change amount
+         * @param {boolean} isPositive Whether the change is positive (should be false here)
+         */
+        function animateCreditChange(amount, isPositive) {
+            // This function is now largely replaced by showNegativeChangeImage for decreases.
+            // Keeping it here for reference or if minor text animations are needed elsewhere.
+            creditChangeOverlay.classList.add('opacity-100');
+            creditChangeTextElement.textContent = `${amount > 0 ? '+' : ''}${amount.toLocaleString()} Social Credit`;
+            creditChangeTextElement.className = `text-7xl font-bold animate-fade-and-move-up ${isPositive ? 'text-green-400' : 'text-red-500'}`;
+
+            // Reset text after animation
+            setTimeout(() => {
+                creditChangeOverlay.classList.remove('opacity-100');
+                creditChangeTextElement.className = `text-7xl font-bold opacity-0`;
+            }, 1800); // アニメーション時間と一致させる
+        }
+
+        /**
+         * Show extreme penalty image
+         */
+        function showExtremePenaltyImage() {
+            extremePenaltyOverlay.classList.add('active'); // Activate the overlay
+            // Note: The transition to next question is handled in selectAnswer now
+        }
+
+        /**
+         * Show positive change image (new function)
+         * @param {number} amount The positive credit change amount
+         */
+        function showPositiveChangeImage(amount) {
+            positiveCreditTextElement.textContent = `+${amount.toLocaleString()} Social Credit`;
+            showScreen(positiveChangeOverlay); // Show the new positive overlay
+            // The overlay will hide and transition to next question via the setTimeout in selectAnswer
+        }
+
+        /**
+         * Show negative change image (NEW function)
+         * @param {number} amount The negative credit change amount
+         */
+        function showNegativeChangeImage(amount) {
+            negativeCreditTextElement.textContent = `${amount.toLocaleString()} Social Credit`; // Amount is already negative, no need for '-'
+            showScreen(negativeChangeOverlay); // Show the new negative overlay
+            // The overlay will hide and transition to next question via the setTimeout in selectAnswer
+        }
+
+
+        /**
+         * Display result screen
+         */
+        function showResult() {
+            // Make sure all overlays are hidden before showing the result screen
+            const overlays = [extremePenaltyOverlay, dangerousThoughtOverlay, positiveChangeOverlay, negativeChangeOverlay];
+            overlays.forEach(overlay => {
+                overlay.classList.remove('active');
+            });
+
+            stopBGM(); // Stop background music when results are shown
+            playFinMusic(); // Play fin.mp3 when result screen is shown
+            finalSocialCreditElement.textContent = socialCredit.toLocaleString();
+            let resultMessage = '';
+            let scoreColorClass = '';
+
+            // Adjusted ranges for extreme negative scores
+            if (socialCredit >= 900) {
+                resultMessage = '模範的な市民！素晴らしい結果です！';
+                scoreColorClass = 'text-green-500';
+            } else if (socialCredit >= 700) {
+                resultMessage = '良い行動でした。更なる努力を期待します。';
+                scoreColorClass = 'text-yellow-500';
+            } else if (socialCredit >= 0) { // Still positive but low
+                resultMessage = '社会信用が低下しました。行動を見直してください。';
+                scoreColorClass = 'text-red-600';
+            } else if (socialCredit < 0 && socialCredit > -10000000000) { // Moderate negative
+                resultMessage = 'あなたの社会信用は深刻な危険にさらされています。';
+                scoreColorClass = 'text-red-600';
+            }
+            else { // Extremely negative
+                resultMessage = '社会信用が完全に失われました。再教育が必要です。';
+                scoreColorClass = 'text-red-700'; // Darker red for extreme penalty
+            }
+
+
+            finalSocialCreditElement.className = `text-4xl sm:text-5xl md:text-6xl font-bold ${scoreColorClass}`;
+            resultMessageElement.textContent = resultMessage;
+            showScreen(resultScreen);
+        }
+
+        // Set up event listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame); // Restart button starts the game
+
+        // Initial display
+        showScreen(startScreen);
+    </script>
+</body>
+</html>
