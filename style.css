@@ -88,3 +88,32 @@ input[type="range"]:disabled::-moz-range-thumb { background: #475569; border-col
 .animate-scroll { animation-name: scroll-text; animation-timing-function: linear; animation-duration: var(--animation-duration, 10s); animation-iteration-count: 1; transform: translateX(var(--marquee-transform-x-target)); }
 @keyframes scroll-text { from { transform: translateX(0%); } to { transform: translateX(var(--marquee-transform-x-target)); } }
 .disabled-button { opacity: 0.5; cursor: not-allowed; }
+
+/* style.css */
+
+.gamepad-focused {
+    outline: 2px solid #00f; /* 青い枠線でハイライト */
+    outline-offset: 2px; /* 要素から少し離して表示 */
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.7); /* 少し光るような効果 */
+    transition: outline-color 0.1s, box-shadow 0.1s; /* スムーズな切り替え */
+}
+
+/* フォーカス時にスライダーのつまみも分かりやすくする */
+.gamepad-focused[type="range"]::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px #00f; /* つまみに二重のリング */
+}
+.gamepad-focused[type="range"]::-moz-range-thumb {
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px #00f;
+}
+
+/* スライダーが「選択状態」になったときの視覚効果 */
+.gamepad-slider-active {
+    outline: 2px solid #f00; /* 赤い枠線など、異なる色で強調 */
+    outline-offset: 2px;
+}
+.gamepad-slider-active[type="range"]::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px #f00; /* つまみも赤く強調 */
+}
+.gamepad-slider-active[type="range"]::-moz-range-thumb {
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px #f00;
+}
