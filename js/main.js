@@ -7,6 +7,7 @@ import * as visualizer from './visualizer.js';
 import * as mediaSession from './mediaSessionHandler.js';
 import { PRESETS } from './eq-presets.js';
 import { AMBIENCE_PRESETS } from './ambience-presets.js';
+import * as inputHandler from './inputHandler.js'; // ★追加: inputHandlerモジュールのインポート
 
 export const mainModule = {
     setupAudioPlayerEventListeners,
