@@ -67,3 +67,21 @@
 ## ファイル構成
 
 このプロジェクトのJavaScriptコードは、保守性を高めるために機能ごとにファイル分割されています。
+
+/
+├── js/
+│   ├── main.js                 # 全体の初期化とイベントリスナー登録
+│   ├── domElements.js          # DOM要素の取得
+│   ├── utils.js                # 汎用ヘルパー関数（時間/ファイルサイズフォーマットなど）
+│   ├── ui.js                   # UI更新関連（メタデータ、ファイル情報、時間表示など）
+│   ├── audioHandler.js         # 音声ファイルの読み込み、再生ロジック、グローバルなファイル情報管理
+│   ├── audioHeaderParser.js    # WAV/FLACファイルのヘッダーから詳細情報やメタデータを解析
+│   ├── lyricsHandler.js        # 歌詞関連の処理（LRCファイルの読み込み、同期、表示）
+│   ├── visualizer.js           # オーディオビジュアライザー関連（Canvas描画、AudioContextグラフ、DSP）
+│   ├── mediaSessionHandler.js  # Media Session API 関連（メディア通知、メディアキー制御）
+│   ├── inputHandler.js         # キーボード、ゲームパッド入力の処理
+│   ├── eq-presets.js           # イコライザープリセットデータ
+│   └── ambience-presets.js     # アンビエンスプリセットデータ
+├── index.html                  # メインのHTMLファイル
+├── style.css                   # カスタムスタイル
+└── package.json                # プロジェクト設定と依存関係
