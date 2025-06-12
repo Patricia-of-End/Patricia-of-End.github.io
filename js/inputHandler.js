@@ -1,42 +1,49 @@
-// js/inputHandler.js
-
 let gamepad = null; // 現在検出されているゲームパッドのオブジェクト
 let animationFrameId = null; // requestAnimationFrame のID
-
-// フォーカス可能なUI要素を管理する変数
-let focusableElements = [];
+let focusableElements = []; // 現在フォーカス可能なUI要素のリスト
 let currentFocusIndex = -1; // 現在フォーカスされている要素のインデックス
+let sliderAdjustmentInterval = null; // スライダー調整用のインターバルIDを保持
+// これらの変数はファイル冒頭で一度だけ宣言されます
 
-// ゲームパッド接続/切断イベントリスナー
+// ゲームパッド接続イベントリスナー
 window.addEventListener("gamepadconnected", (e) => {
     console.log("ゲームパッドが接続されました:", e.gamepad.id);
-    gamepad = e.gamepad;
-    // 接続されたらポーリング開始
+    gamepad = e.gamepad; // 接続されたゲームパッドを保持
     if (!animationFrameId) {
+        // まだポーリングが開始されていなければ開始
         pollGamepads();
-    }
-    // 接続時にUI要素リストを更新し、最初の要素にフォーカス
-    updateFocusableElements();
-    if (focusableElements.length > 0) {
-        setFocus(0);
     }
 });
 
+// ゲームパッド切断イベントリスナー
 window.addEventListener("gamepaddisconnected", (e) => {
     console.log("ゲームパッドが切断されました:", e.gamepad.id);
-    gamepad = null;
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
+    if (gamepad && gamepad.index === e.gamepad.index) {
+        // 切断されたのが現在使用しているゲームパッドであれば、リセット
+        gamepad = null;
+        removeFocus(); // フォーカスを解除
+        // 他のゲームパッドが接続されていないか確認し、再検出
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i] && gamepads[i].connected) {
+                gamepad = gamepads[i];
+                console.log("切断後、ゲームパッドを再検出:", gamepad.id);
+                break;
+            }
+        }
+        if (!gamepad && animationFrameId) {
+            // 他にゲームパッドがなければポーリングを停止
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            console.log("全てのゲームパッドが切断されました。ポーリングを停止します。");
+        }
     }
-    // フォーカスを解除
-    removeFocus();
 });
 
 // ゲームパッドの状態を継続的にポーリングする関数
 function pollGamepads() {
     if (!gamepad) {
-        // ゲームパッドが切断された場合は、新しいゲームパッドを検出するために getGamepads を呼ぶ
+        // ゲームパッドが検出されていない場合、再度アクティブなゲームパッドを探す
         const gamepads = navigator.getGamepads();
         for (let i = 0; i < gamepads.length; i++) {
             if (gamepads[i] && gamepads[i].connected) {
@@ -46,44 +53,44 @@ function pollGamepads() {
             }
         }
         if (!gamepad) {
+            // ゲームパッドが見つからない場合、アニメーションフレームのループを停止
             animationFrameId = null;
-            return; // 接続されたゲームパッドがなければポーリング停止
+            return;
         }
     }
 
-    // ゲームパッドの状態を更新 (重要！)
     gamepad = navigator.getGamepads()[gamepad.index]; // 最新の状態を取得
 
-    // ボタンの処理
-    handleButtons();
+    handleButtons(); // ボタン入力の処理
+    handleAxes(); // アナログスティック入力の処理
 
-    // スティックの処理 (スライダー調整用)
-    handleAxes();
-
+    // 次のフレームで再度ポーリング
     animationFrameId = requestAnimationFrame(pollGamepads);
 }
 
 // ボタン入力処理
-let lastButtonStates = {}; // 前回のボタン状態を保存
+let lastButtonStates = {}; // 前回のボタンの状態を保持
 
 function handleButtons() {
-    if (!gamepad) return;
+    if (!gamepad) return; // ゲームパッドがなければ処理しない
 
     gamepad.buttons.forEach((button, i) => {
         // ボタンが「押された瞬間」を検出 (前回の状態と比較)
         if (button.pressed && !lastButtonStates[i]) {
-            // ここでどのボタンが押されたかに応じて処理を分岐
+            // モーダルやパネルが開いている場合は、決定ボタン (0) と戻るボタン (1, 2) 以外は入力をブロック
+            const activeModal = getActivePanelOrModal();
+            if (activeModal && i !== 0 && i !== 1 && i !== 2) {
+                return; // ブロック対象のボタンでなければ処理をスキップ
+            }
+
             switch (i) {
-                // 例: ゲームパッドのAボタン (XInputなら0番、DualShockならXまたは○)
-                case 0: // Aボタン/〇ボタン (決定ボタンとして使用)
+                case 0: // Aボタン/〇ボタン (決定ボタン)
                     handleSelectButton();
                     break;
-                // 例: ゲームパッドのBボタン (XInputなら1番、DualShockなら〇または△)
-                case 1: // Bボタン/✕ボタン (戻る/閉じるボタンとして使用)
-                case 2: // Xボタン/□ボタン (別の戻るボタンとして使用することも)
+                case 1: // Bボタン/✕ボタン (戻る/閉じるボタン)
+                case 2: // Xボタン/□ボタン (もう一つの戻るボタンとして)
                     handleBackButton();
                     break;
-                // 十字キー上: 12, 十字キー下: 13, 十字キー左: 14, 十字キー右: 15
                 case 12: // 十字キー上
                     handleDirectionalInput('up');
                     break;
@@ -96,219 +103,291 @@ function handleButtons() {
                 case 15: // 十字キー右
                     handleDirectionalInput('right');
                     break;
-                // 他のボタンも必要に応じて追加
-                // case 9: // Startボタン (例: 再生/一時停止)
-                //     // audioHandler.togglePlayPauseAudio(); // main.jsから渡された参照があれば呼び出し
-                //     break;
+                // 他のボタンが必要ならここに追加
             }
         }
-        lastButtonStates[i] = button.pressed; // 現在の状態を保存
+        lastButtonStates[i] = button.pressed; // 現在のボタンの状態を保存
     });
 }
 
-// アナログスティック入力処理 (スライダー調整にも使える)
-let lastAxesStates = {}; // 前回の軸の状態を保存
+// アナログスティック入力処理
+let lastAxesStates = {}; // 前回の軸の状態を保持
 
 function handleAxes() {
-    if (!gamepad) return;
+    if (!gamepad) return; // ゲームパッドがなければ処理しない
+
+    const deadZone = 0.1; // スティックの遊び（デッドゾーン）
+    const sensitivity = 0.05; // 入力の感度
+
+    const targetElement = focusableElements[currentFocusIndex]; // 現在フォーカスされている要素
+    const isFocusedOnSlider = targetElement && targetElement.type === 'range'; // フォーカスがスライダーに当たっているか
 
     gamepad.axes.forEach((axisValue, i) => {
-        // スティックのデッドゾーンを設定 (わずかな傾きを無視)
-        const deadZone = 0.1;
-        const sensitivity = 0.05; // 軸の移動を検出する感度
-
         // X軸 (左右) の入力 (左スティック: 0, 右スティック: 2)
         if (i === 0 || i === 2) {
-            if (Math.abs(axisValue) > deadZone) {
-                // 軸が一定量以上動いた、または方向が変わった
-                if (Math.sign(axisValue) !== Math.sign(lastAxesStates[i] || 0) || Math.abs(axisValue - (lastAxesStates[i] || 0)) > sensitivity) {
-                    handleSliderAdjustment(axisValue > 0 ? 'right' : 'left', axisValue);
+            if (isFocusedOnSlider) { // フォーカスがスライダーに当たっている場合のみ
+                if (Math.abs(axisValue) > deadZone) { // デッドゾーンを超えているか
+                    // スティックの方向が変わったか、感度以上の変化があったか
+                    if (Math.sign(axisValue) !== Math.sign(lastAxesStates[i] || 0) || Math.abs(axisValue - (lastAxesStates[i] || 0)) > sensitivity) {
+                        handleSliderAdjustment(axisValue > 0 ? 'right' : 'left', axisValue); // スライダーを調整
+                    }
+                } else if (Math.abs(lastAxesStates[i] || 0) > deadZone) {
+                    // デッドゾーンに戻った場合、スライダー調整を停止
+                    handleSliderAdjustment('stop', axisValue);
                 }
-            } else if (Math.abs(lastAxesStates[i] || 0) > deadZone) { // スティックがデッドゾーンに戻った
-                 handleSliderAdjustment('stop', axisValue); // スライダー調整を停止
+            } else { // スライダー以外にフォーカスがある場合は、スライダー調整を停止
+                handleSliderAdjustment('stop', axisValue);
             }
         }
         // Y軸 (上下) の入力 (左スティック: 1, 右スティック: 3)
         if (i === 1 || i === 3) {
-            if (Math.abs(axisValue) > deadZone) {
-                // 軸が一定量以上動いた、または方向が変わった
+            if (Math.abs(axisValue) > deadZone) { // デッドゾーンを超えているか
+                // スティックの方向が変わったか、感度以上の変化があったか
                 if (Math.sign(axisValue) !== Math.sign(lastAxesStates[i] || 0) || Math.abs(axisValue - (lastAxesStates[i] || 0)) > sensitivity) {
-                    handleSliderAdjustment(axisValue > 0 ? 'down' : 'up', axisValue);
+                    handleDirectionalInput(axisValue > 0 ? 'down' : 'up'); // スティックの上下はフォーカス移動に使う
                 }
-            } else if (Math.abs(lastAxesStates[i] || 0) > deadZone) {
-                 handleSliderAdjustment('stop', axisValue);
             }
         }
-        lastAxesStates[i] = axisValue;
+        lastAxesStates[i] = axisValue; // 現在の軸の状態を保存
     });
 }
 
 
 // --- UIフォーカスと操作ロジック ---
 
-// フォーカス可能な要素を更新する関数
-// プレイヤーのUIが動的に変化する場合（例：パネルの表示/非表示）は、適宜呼び出す必要があります。
-export function updateFocusableElements() { // export して main.js などから呼び出せるようにする
-    // プレイヤー内のすべてのボタン、入力フィールド、スライダーなどを選択
-    // 注意: hiddenな要素は含めないようにする
-    const allCandidates = document.querySelectorAll(
-        '.player-container button:not([disabled]):not(.hidden), ' +
-        '.player-container input:not([disabled]):not(.hidden), ' +
-        '#equalizerPanel button:not([disabled]):not(.hidden), ' +
-        '#equalizerPanel input:not([disabled]):not(.hidden), ' +
-        '#tonePanel button:not([disabled]):not(.hidden), ' +
-        '#tonePanel input:not([disabled]):not(.hidden), ' +
-        '#ambiencePanel button:not([disabled]):not(.hidden), ' +
-        '#ambiencePanel input:not([disabled]):not(.hidden), ' +
-        '#vocalCutPanel button:not([disabled]):not(.hidden), ' +
-        '#vocalCutPanel input[type="checkbox"]:not([disabled]):not(.hidden), ' + // チェックボックスを明示
-        '#albumArt.cursor-pointer:not(.hidden)' // アルバムアートもフォーカス可能にする
-    );
+// 現在開いている最前面のパネルまたはモーダルを取得する
+function getActivePanelOrModal() {
+    // 可能性のあるパネルとモーダルのリスト
+    const panels = [
+        document.getElementById('equalizerPanel'),
+        document.getElementById('tonePanel'),
+        document.getElementById('ambiencePanel'),
+        document.getElementById('vocalCutPanel')
+    ];
+    const albumArtModal = document.getElementById('albumArtModal');
+    const fileDetailsModal = document.getElementById('fileDetailsModal'); // ★追加: 詳細情報モーダル
 
-    // 現在表示されている要素のみをフィルタリング
-    focusableElements = Array.from(allCandidates).filter(el => {
-        // offsetParent が null でない = 要素が描画されている
-        // CSSのdisplay:none や visibility:hidden の要素は offsetParent が null になる
-        return el.offsetParent !== null;
+    let activePanel = null;
+    let maxZIndex = -1; // 最大z-indexを初期化
+
+    // 各パネルをチェックし、非表示でなく、z-indexが最も高いものを探す
+    panels.forEach(panel => {
+        if (panel && !panel.classList.contains('hidden')) {
+            const zIndex = parseFloat(window.getComputedStyle(panel).zIndex) || 0; // z-indexを取得
+            if (zIndex >= maxZIndex) {
+                maxZIndex = zIndex;
+                activePanel = panel;
+            }
+        }
     });
 
-    // ソート (例: 上から下、左から右の順にソート)
+    // アルバムアートモーダルが非表示でないかチェックし、z-indexを比較
+    if (albumArtModal && !albumArtModal.classList.contains('hidden')) {
+        const modalZIndex = parseFloat(window.getComputedStyle(albumArtModal).zIndex) || 0;
+        if (modalZIndex >= maxZIndex) {
+            maxZIndex = modalZIndex;
+            activePanel = albumArtModal;
+        }
+    }
+    // ★追加: ファイル詳細情報モーダルが最も手前にあるか確認
+    if (fileDetailsModal && !fileDetailsModal.classList.contains('hidden')) {
+        const detailsModalZIndex = parseFloat(window.getComputedStyle(fileDetailsModal).zIndex) || 0;
+        if (detailsModalZIndex >= maxZIndex) {
+            activePanel = fileDetailsModal; // 最も手前であればこれをアクティブパネルとする
+        }
+    }
+    return activePanel; // アクティブなパネルまたはモーダルを返す
+}
+
+
+// フォーカス可能な要素を更新する関数
+export function updateFocusableElements() {
+    removeFocus(); // いったん現在のフォーカスを解除
+
+    const activeContainer = getActivePanelOrModal(); // 現在アクティブなパネルまたはモーダルを取得
+    let querySelectorBase = '';
+
+    if (activeContainer) {
+        querySelectorBase = `#${activeContainer.id} `; // アクティブなコンテナ内を検索
+    } else {
+        querySelectorBase = '#player-container '; // メインのプレーヤーコンテナ内を検索
+    }
+
+    // フォーカス可能なすべての要素の候補をCSSセレクタで取得
+    const allCandidates = document.querySelectorAll(
+        querySelectorBase + 'button:not([disabled]):not(.hidden), ' + // 有効で非表示でないボタン
+        querySelectorBase + 'input[type="range"]:not([disabled]):not(.hidden), ' + // 有効で非表示でないスライダー
+        querySelectorBase + 'input[type="file"]:not([disabled]):not(.hidden), ' + // 有効で非表示でないファイル入力
+        querySelectorBase + 'input[type="checkbox"]:not([disabled]):not(.hidden), ' + // 有効で非表示でないチェックボックス
+        querySelectorBase + 'select:not([disabled]):not(.hidden), ' + // 有効で非表示でないセレクトボックス
+        querySelectorBase + '#albumArt.cursor-pointer:not(.hidden), ' + // カーソルポインターが有効なアルバムアート（クリック可能）
+        querySelectorBase + '#fileInfoDisplay div span' // ★fileInfoDisplay内の各span要素をフォーカス可能にする
+    );
+
+    // 実際に表示されている要素のみにフィルター
+    focusableElements = Array.from(allCandidates).filter(el => {
+        // offsetParentがnullでない（DOMツリー内にあり）、hiddenクラスがなく、幅と高さが0より大きい要素
+        return el.offsetParent !== null && !el.classList.contains('hidden') && el.clientWidth > 0 && el.clientHeight > 0;
+    });
+
+    // 要素を画面上の位置に基づいてソート (上から下、次に左から右の順)
     focusableElements.sort((a, b) => {
         const rectA = a.getBoundingClientRect();
         const rectB = b.getBoundingClientRect();
-        // まずY座標でソート (上にあるものが先)
         if (rectA.top !== rectB.top) {
-            return rectA.top - rectB.top;
+            return rectA.top - rectB.top; // 上にあるものが優先
         }
-        // Y座標がほぼ同じならX座標でソート (左にあるものが先)
-        return rectA.left - rectB.left;
+        return rectA.left - rectB.left; // 同じ高さなら左にあるものが優先
     });
 
-    // 現在フォーカスしている要素がまだリストにあるか確認し、あればインデックスを更新
-    if (currentFocusIndex !== -1 && focusableElements[currentFocusIndex] && !focusableElements.includes(focusableElements[currentFocusIndex])) {
-        removeFocus(); // 以前の要素が非表示になったらフォーカス解除
-        currentFocusIndex = -1;
+    if (focusableElements.length > 0) {
+        // 以前フォーカスされていた要素があればそのインデックスを探す
+        let reFocusIndex = focusableElements.findIndex(el => el.classList.contains('gamepad-focused'));
+        if (reFocusIndex === -1) {
+            reFocusIndex = 0; // なければ最初の要素にフォーカス
+        }
+        setFocus(reFocusIndex); // フォーカスを設定
+    } else {
+        currentFocusIndex = -1; // フォーカス可能な要素がなければインデックスをリセット
     }
 }
 
 // フォーカスを設定する関数
 function setFocus(index) {
     if (currentFocusIndex !== -1 && focusableElements[currentFocusIndex]) {
-        removeFocus();
+        removeFocus(); // 既にフォーカスがある場合は解除
     }
 
     if (index >= 0 && index < focusableElements.length) {
-        currentFocusIndex = index;
-        const targetElement = focusableElements[currentFocusIndex];
-        targetElement.classList.add('gamepad-focused'); // CSSでハイライト
-        targetElement.focus(); // キーボードフォーカスも設定 (アクセシビリティのため)
+        currentFocusIndex = index; // 新しいフォーカスインデックスを設定
+        const targetElement = focusableElements[currentFocusIndex]; // 対象の要素を取得
+        targetElement.classList.add('gamepad-focused'); // フォーカススタイルを追加
+        targetElement.focus(); // 要素にブラウザのフォーカスを設定
 
-        // 必要に応じて、フォーカスされた要素が画面内に収まるようにスクロール
+        // 要素がビューポート内に入るようにスクロール
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
-        currentFocusIndex = -1; // フォーカスなし
+        currentFocusIndex = -1; // 無効なインデックスの場合はリセット
     }
 }
 
 // フォーカスを解除する関数
 function removeFocus() {
     if (currentFocusIndex !== -1 && focusableElements[currentFocusIndex]) {
-        focusableElements[currentFocusIndex].classList.remove('gamepad-focused');
-        focusableElements[currentFocusIndex].blur(); // キーボードフォーカスを解除
+        focusableElements[currentFocusIndex].classList.remove('gamepad-focused'); // フォーカススタイルを削除
+        if (focusableElements[currentFocusIndex].classList.contains('gamepad-slider-active')) {
+            focusableElements[currentFocusIndex].classList.remove('gamepad-slider-active'); // スライダーのアクティブ状態も解除
+        }
+        focusableElements[currentFocusIndex].blur(); // 要素からブラウザのフォーカスを外す
     }
-    currentFocusIndex = -1;
+    currentFocusIndex = -1; // インデックスをリセット
 }
 
 // 方向入力のハンドラ (十字キーやスティック)
 function handleDirectionalInput(direction) {
-    // まず、フォーカス可能な要素リストが最新であることを確認
-    updateFocusableElements();
+    updateFocusableElements(); // 最新の要素リストに更新
 
-    if (focusableElements.length === 0) return; // 操作できる要素がない
+    if (focusableElements.length === 0) return; // フォーカス可能な要素がなければ処理しない
 
-    let nextIndex = currentFocusIndex;
-    let currentElement = focusableElements[currentFocusIndex];
+    let nextIndex = currentFocusIndex; // 次のフォーカスインデックスの初期値
+    const currentElement = focusableElements[currentFocusIndex]; // 現在フォーカスされている要素
 
-    if (currentFocusIndex === -1 || !currentElement) { // まだフォーカスされていない場合
-        setFocus(0); // 最初の要素にフォーカス
+    if (currentFocusIndex === -1 || !currentElement) {
+        setFocus(0); // フォーカスがなければ最初の要素に設定
         return;
     }
 
-    const currentRect = currentElement.getBoundingClientRect();
-    let bestCandidate = null;
-    let minDistance = Infinity;
+    const currentRect = currentElement.getBoundingClientRect(); // 現在の要素のDCMRect
+    let bestCandidate = null; // 最適な候補要素
+    let minScore = Infinity; // 最適な候補のスコア
 
-    // フォーカス移動のロジック（隣接要素を幾何学的に計算する）
     focusableElements.forEach((el, index) => {
-        if (index === currentFocusIndex) return; // 自分自身は候補から除外
+        if (index === currentFocusIndex) return; // 現在の要素はスキップ
 
-        const rect = el.getBoundingClientRect();
-        let isCandidate = false;
-        let distance = Infinity;
+        const rect = el.getBoundingClientRect(); // 候補要素のDCMRect
+        let isViableCandidate = false; // 有効な候補であるか
 
+        const tolerance = 5; // 方向判定の許容誤差
+
+        // 各方向に対して有効な候補であるかを判定
         switch (direction) {
             case 'up':
-                // 上方向にある要素
-                if (rect.bottom <= currentRect.top) { // 完全に上にあるか、わずかに重なる
-                    isCandidate = true;
-                    distance = currentRect.top - rect.bottom; // 上からの距離
+                // 候補が現在の要素より上にあり、かつ縦方向の許容誤差内にある
+                if (rect.bottom < currentRect.top + tolerance) {
+                    isViableCandidate = true;
                 }
                 break;
             case 'down':
-                // 下方向にある要素
-                if (rect.top >= currentRect.bottom) { // 完全に下にあるか、わずかに重なる
-                    isCandidate = true;
-                    distance = rect.top - currentRect.bottom; // 下からの距離
+                // 候補が現在の要素より下にあり、かつ縦方向の許容誤差内にある
+                if (rect.top > currentRect.bottom - tolerance) {
+                    isViableCandidate = true;
                 }
                 break;
             case 'left':
-                // 左方向にある要素
-                if (rect.right <= currentRect.left) { // 完全に左にあるか、わずかに重なる
-                    isCandidate = true;
-                    distance = currentRect.left - rect.right; // 左からの距離
+                // 候補が現在の要素より左にあり、かつ横方向の許容誤差内にある
+                if (rect.right < currentRect.left + tolerance) {
+                    isViableCandidate = true;
                 }
                 break;
             case 'right':
-                // 右方向にある要素
-                if (rect.left >= currentRect.right) { // 完全に右にあるか、わずかに重なる
-                    isCandidate = true;
-                    distance = rect.left - currentRect.right; // 右からの距離
+                // 候補が現在の要素より右にあり、かつ横方向の許容誤差内にある
+                if (rect.left > currentRect.right - tolerance) {
+                    isViableCandidate = true;
                 }
                 break;
         }
 
-        if (isCandidate) {
-            // X軸またはY軸の重なりを考慮 (重要: 同じ行/列にいるかを判断)
-            const overlapX = Math.max(0, Math.min(currentRect.right, rect.right) - Math.max(currentRect.left, rect.left));
-            const overlapY = Math.max(0, Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top));
+        if (isViableCandidate) {
+            let primaryDistance = 0; // 主方向の距離 (上下または左右)
+            let secondaryMisalignment = 0; // 副方向のずれ (水平または垂直)
+            let overlap = 0; // 重なり具合
 
-            // 重なりが全くない場合はスコアを低くする
+            const centerCurrentX = currentRect.left + currentRect.width / 2;
+            const centerCurrentY = currentRect.top + currentRect.height / 2;
+            const centerCandidateX = rect.left + rect.width / 2;
+            const centerCandidateY = rect.top + rect.height / 2;
+
             if (direction === 'up' || direction === 'down') {
-                if (overlapX <= 0) distance += 1000; // X軸の重なりがないと遠くなる
+                primaryDistance = Math.abs(centerCurrentY - centerCandidateY); // Y軸方向の距離
+                secondaryMisalignment = Math.abs(centerCurrentX - centerCandidateX); // X軸方向のずれ
+                // 左右の重なりを計算
+                overlap = Math.max(0, Math.min(currentRect.right, rect.right) - Math.max(currentRect.left, rect.left));
             } else { // left || right
-                if (overlapY <= 0) distance += 1000; // Y軸の重なりがないと遠くなる
+                primaryDistance = Math.abs(centerCurrentX - centerCandidateX); // X軸方向の距離
+                secondaryMisalignment = Math.abs(centerCurrentY - centerCandidateY); // Y軸方向のずれ
+                // 上下の重なりを計算
+                overlap = Math.max(0, Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top));
             }
 
-            if (distance < minDistance) {
-                minDistance = distance;
+            // スコアを計算: 主方向の距離を優先し、副方向のずれは軽めに考慮
+            let score = primaryDistance + secondaryMisalignment * 0.5;
+
+            const MIN_OVERLAP_FOR_ALIGNMENT = 5; // 重なりがこれ以上あればアラインメントが良好とみなす
+            const MAX_MISALIGNMENT_FOR_NO_OVERLAP_PENALTY = 20; // 重なりがない場合にペナルティを与えない許容ずれ
+
+            // 重なりが少なく、ずれが大きい場合にペナルティを加算
+            if (overlap < MIN_OVERLAP_FOR_ALIGNMENT && secondaryMisalignment > MAX_MISALIGNMENT_FOR_NO_OVERLAP_PENALTY) {
+                score += 500; // 大きなペナルティ
+            } else if (overlap < MIN_OVERLAP_FOR_ALIGNMENT && secondaryMisalignment > 0) {
+                score += 50; // 中程度のペナルティ
+            }
+
+            // より良い候補が見つかった場合、更新
+            if (score < minScore) {
+                minScore = score;
                 bestCandidate = el;
             }
         }
     });
 
     if (bestCandidate) {
-        nextIndex = focusableElements.indexOf(bestCandidate);
+        nextIndex = focusableElements.indexOf(bestCandidate); // 最適な候補のインデックスを取得
     } else {
-        // 最適な候補が見つからない場合（行/列の端など）は、単純なインデックス移動をフォールバックとして使用
-        // これはあくまでフォールバックなので、UIレイアウトによっては完璧ではない
-        if (direction === 'up') nextIndex = (currentFocusIndex === 0) ? focusableElements.length - 1 : currentFocusIndex - 1;
-        if (direction === 'down') nextIndex = (currentFocusIndex === focusableElements.length - 1) ? 0 : currentFocusIndex + 1;
-        // 左右のフォールバックは、このレイアウトでは上下と同じになる可能性が高い
-        // 複雑なUIの場合、左右移動のフォールバックは慎重に設計する必要がある
+        nextIndex = currentFocusIndex; // 候補が見つからない場合は現在のフォーカスを維持
     }
 
     if (nextIndex !== currentFocusIndex) {
-        setFocus(nextIndex);
+        setFocus(nextIndex); // フォーカスを移動
     }
 }
 
@@ -317,178 +396,170 @@ function handleDirectionalInput(direction) {
 function handleSelectButton() {
     if (currentFocusIndex !== -1 && focusableElements[currentFocusIndex]) {
         const targetElement = focusableElements[currentFocusIndex];
-        
-        // スライダーの場合はクリックではなく、値調整をアクティブにする
-        if (targetElement.type === 'range') {
-            // スライダーの「つまみ」にフォーカスを当てたかのような視覚効果
-            targetElement.classList.add('gamepad-slider-active'); 
-            // スライダーにフォーカスがある状態で決定ボタンを押した場合は、
-            // その後の左右入力でスライダーを調整できるよう、特別なモードに入るなど考慮が必要だが、
-            // ここではクリック処理のみ。
-            // 必要に応じて、ここではスライダー調整を開始するフラグを立てるなど、
-            // さらに複雑なロジックを実装できる
+
+        if (targetElement.type === 'range') { // スライダーの場合
+            targetElement.classList.toggle('gamepad-slider-active'); // スライダーのアクティブ状態をトグル
+            if (!targetElement.classList.contains('gamepad-slider-active')) {
+                // スライダーが非アクティブになった場合、調整インターバルをクリア
+                if (sliderAdjustmentInterval) {
+                    clearInterval(sliderAdjustmentInterval);
+                    sliderAdjustmentInterval = null;
+                }
+            }
         } else if (targetElement.type === 'checkbox') { // チェックボックスの場合
-            targetElement.checked = !targetElement.checked; // チェックを切り替える
+            targetElement.checked = !targetElement.checked; // チェック状態を反転
             const event = new Event('change', { bubbles: true }); // changeイベントを発火
             targetElement.dispatchEvent(event);
-        }
-        else {
-            // 通常のボタンやinput[type="file"]の場合はクリックイベントを発生させる
-            targetElement.click();
+        } else if (targetElement.tagName === 'SELECT') { // セレクトボックスの場合
+            targetElement.click(); // クリックイベントを発火してドロップダウンを開く
+            setTimeout(() => {
+                // ドロップダウンが開いたら、フォーカス可能な要素リストを更新
+                updateFocusableElements();
+            }, 100);
+        } else {
+            targetElement.click(); // その他の要素はクリックイベントを発火
         }
 
-        // 特別な要素の処理 (例: パネルが開閉されたらフォーカス要素を再更新)
-        // パネルを開くボタンが押された場合
-        if (targetElement.id === 'toggleEqBtn' || targetElement.id === 'toggleToneBtn' ||
-            targetElement.id === 'toggleAmbienceBtn' || targetElement.id === 'toggleVocalCutBtn') {
-            // パネルが開いた後、少し待ってからフォーカス可能な要素を再取得
-            // 新しいパネル内の要素にフォーカスを移すことも検討
+        // パネルを開くボタンが押された場合、新しいパネル内の最初の要素にフォーカスを移動
+        const panelsToggleIds = ['toggleEqBtn', 'toggleToneBtn', 'toggleAmbienceBtn', 'toggleVocalCutBtn', 'openDetailsModalBtn']; // ★openDetailsModalBtnを追加
+        if (panelsToggleIds.includes(targetElement.id)) {
             setTimeout(() => {
-                updateFocusableElements();
-                // 開いたパネル内の最初の要素にフォーカスを移すロジック
-                // 例: document.getElementById('equalizerPanel')がhiddenでないか確認し、その中の最初のinputなどに移す
-                const openedPanel = document.getElementById(targetElement.dataset.panelId || '').classList.contains('hidden') ? null : document.getElementById(targetElement.dataset.panelId);
+                updateFocusableElements(); // UIが更新された後にフォーカス可能な要素を再取得
+                const openedPanelIdMap = {
+                    'toggleEqBtn': 'equalizerPanel',
+                    'toggleToneBtn': 'tonePanel',
+                    'toggleAmbienceBtn': 'ambiencePanel',
+                    'toggleVocalCutBtn': 'vocalCutPanel',
+                    'openDetailsModalBtn': 'fileDetailsModal' // ★対応するパネルIDを追加
+                };
+                const openedPanelId = openedPanelIdMap[targetElement.id];
+                const openedPanel = document.getElementById(openedPanelId);
                 if (openedPanel) {
-                    const firstFocusableInPanel = openedPanel.querySelector('button:not([disabled]):not(.hidden), input:not([disabled]):not(.hidden)');
+                    // 開かれたパネル内の最初のフォーカス可能な要素にフォーカスを移動
+                    const firstFocusableInPanel = openedPanel.querySelector('button:not([disabled]):not(.hidden), input:not([disabled]):not(.hidden), select:not([disabled]):not(.hidden)');
                     if (firstFocusableInPanel) {
                         setFocus(focusableElements.indexOf(firstFocusableInPanel));
                     }
                 }
-            }, 300); // UIアニメーションを考慮して少し遅延
+            }, 300); // パネルが開くのを少し待つ
         }
     }
 }
+
 
 // スライダー調整のハンドラ
-let sliderAdjustmentInterval = null; // スライダー連続調整用インターバルID
-let currentSlider = null; // 現在調整中のスライダー
-
 function handleSliderAdjustment(direction, axisValue) {
-    if (currentFocusIndex === -1 || !focusableElements[currentFocusIndex]) return;
-
     const targetElement = focusableElements[currentFocusIndex];
 
-    if (targetElement.type === 'range') { // フォーカスがスライダーである場合
-        if (targetElement !== currentSlider) { // スライダーが変わったら以前のインターバルをクリア
-            if (sliderAdjustmentInterval) clearInterval(sliderAdjustmentInterval);
-            sliderAdjustmentInterval = null;
-            currentSlider = targetElement;
-        }
-
-        if (direction === 'stop') {
-            if (sliderAdjustmentInterval) {
-                clearInterval(sliderAdjustmentInterval);
-                sliderAdjustmentInterval = null;
-                currentSlider = null;
-            }
-            return;
-        }
-
-        const step = parseFloat(targetElement.step || '1');
-        const min = parseFloat(targetElement.min || '0');
-        const max = parseFloat(targetElement.max || '100');
-
-        let increment = 0;
-        if (direction === 'right') { // 右方向で増加
-            increment = step;
-        } else if (direction === 'left') { // 左方向で減少
-            increment = -step;
-        } else if (direction === 'up' || direction === 'down') { // 上下方向もスライダー調整に使う場合
-            // スライダーの種類やUIレイアウトに応じて調整
-            // 例えば、垂直スライダーの場合は上下で増減
-            increment = (direction === 'up' ? step : -step);
-        }
-
-        // スティックの傾きに応じて調整速度を変える (オプション)
-        // increment *= (axisValue ? Math.abs(axisValue) : 1);
-
-        // 連続調整のインターバル設定
-        if (!sliderAdjustmentInterval) {
-            sliderAdjustmentInterval = setInterval(() => {
-                let newValue = parseFloat(targetElement.value) + increment;
-                newValue = Math.max(min, Math.min(max, newValue)); // 最小値・最大値でクランプ
-                targetElement.value = newValue;
-
-                // inputイベントを発生させて、既存のイベントリスナー（main.jsなど）をトリガー
-                const event = new Event('input', { bubbles: true });
-                targetElement.dispatchEvent(event);
-
-            }, 50); // 50msごとに値を更新（調整可能）
-        }
-    } else {
-        // フォーカスがスライダーでない場合は、スライダー調整を停止
+    // 対象がスライダーでなく、フォーカスされておらず、アクティブでない場合は処理しない
+    if (!targetElement || targetElement.type !== 'range' || !targetElement.classList.contains('gamepad-focused') || !targetElement.classList.contains('gamepad-slider-active')) {
         if (sliderAdjustmentInterval) {
-            clearInterval(sliderAdjustmentInterval);
+            clearInterval(sliderAdjustmentInterval); // 調整インターバルをクリア
             sliderAdjustmentInterval = null;
-            currentSlider = null;
         }
+        return;
+    }
+
+    if (direction === 'stop') { // 'stop'信号の場合
+        if (sliderAdjustmentInterval) {
+            clearInterval(sliderAdjustmentInterval); // 調整インターバルをクリア
+            sliderAdjustmentInterval = null;
+        }
+        return;
+    }
+
+    const step = parseFloat(targetElement.step || '1'); // スライダーのステップ値を取得
+    const min = parseFloat(targetElement.min || '0'); // スライダーの最小値を取得
+    const max = parseFloat(targetElement.max || '100'); // スライダーの最大値を取得
+
+    let increment = 0;
+    if (direction === 'right') {
+        increment = step; // 右方向ならステップ値を加算
+    } else if (direction === 'left') {
+        increment = -step; // 左方向ならステップ値を減算
+    }
+
+    if (!sliderAdjustmentInterval) {
+        // インターバルが設定されていなければ、新たに設定
+        sliderAdjustmentInterval = setInterval(() => {
+            let newValue = parseFloat(targetElement.value) + increment; // 現在値にインクリメント値を加算
+            newValue = Math.max(min, Math.min(max, newValue)); // 最小値と最大値の間に収める
+            targetElement.value = newValue; // スライダーの値を更新
+
+            const event = new Event('input', { bubbles: true }); // inputイベントを発火
+            targetElement.dispatchEvent(event);
+
+        }, 50); // 50ミリ秒ごとに更新
     }
 }
 
 
-// 「戻る/閉じる」ボタンのハンドラ (例: Bボタン)
+// 「戻る/閉じる」ボタンのハンドラ (例: Bボタン / ✕ボタン)
 function handleBackButton() {
-    // 開いているパネルを閉じるロジック
+    // 最初に拡大アルバムアートモーダルが開いているか確認し、開いていれば閉じる
+    const albumArtModal = document.getElementById('albumArtModal');
+    if (albumArtModal && !albumArtModal.classList.contains('hidden')) {
+        albumArtModal.classList.add('hidden'); // モーダルを非表示にする
+        updateFocusableElements(); // フォーカス可能な要素を更新
+        console.log("アルバムアートモーダルを閉じました。");
+        return; // 他の処理はせず終了
+    }
+
+    // ★ファイル詳細情報モーダルが開いているか確認し、開いていれば閉じる
+    const fileDetailsModal = document.getElementById('fileDetailsModal');
+    if (fileDetailsModal && !fileDetailsModal.classList.contains('hidden')) {
+        fileDetailsModal.classList.add('hidden'); // モーダルを非表示にする
+        updateFocusableElements(); // フォーカス可能な要素を更新
+        console.log("ファイル詳細情報モーダルを閉じました。");
+        return; // 他の処理はせず終了
+    }
+
+    // 次に、パネルが開いているか確認し、最も前面にあるものを閉じる
     const panels = [
         document.getElementById('equalizerPanel'),
         document.getElementById('tonePanel'),
         document.getElementById('ambiencePanel'),
         document.getElementById('vocalCutPanel')
     ];
-    const albumArtModal = document.getElementById('albumArtModal');
 
-    // 開いているパネルが複数ある場合、奥にあるものから閉じる（Z-indexや表示順を考慮）
-    // 通常は、最も手前にあるものが閉じる
-    let panelClosed = false;
-    for (let i = panels.length - 1; i >= 0; i--) {
-        if (panels[i] && !panels[i].classList.contains('hidden')) {
-            panels[i].classList.add('hidden');
-            panelClosed = true;
-            setTimeout(updateFocusableElements, 300); // 閉じた後、要素リストを更新
-            break; // 1つ閉じたら終了
+    let activePanel = null;
+    let maxZIndex = -1;
+
+    panels.forEach(panel => {
+        if (panel && !panel.classList.contains('hidden')) {
+            const zIndex = parseFloat(window.getComputedStyle(panel).zIndex) || 0;
+            if (zIndex >= maxZIndex) {
+                maxZIndex = zIndex;
+                activePanel = panel;
+            }
         }
+    });
+
+    if (activePanel) {
+        activePanel.classList.add('hidden'); // アクティブなパネルを非表示にする
+        updateFocusableElements(); // フォーカス可能な要素を更新
+        console.log(`パネル #${activePanel.id} を閉じました。`);
+        return; // 他の処理はせず終了
     }
 
-    // モーダルが開いていたら閉じる (パネルより優先)
-    if (!panelClosed && albumArtModal && !albumArtModal.classList.contains('hidden')) {
-        albumArtModal.classList.add('hidden');
-        document.body.style.overflow = ''; // スクロール禁止を解除
-        document.getElementById('modalAlbumArt').src = ''; // 安全のためにsrcをクリア
-        panelClosed = true;
-        setTimeout(updateFocusableElements, 300); // 閉じた後、要素リストを更新
-    }
-
-    if (panelClosed) {
-        // 何か閉じた場合は、閉じた後のメインUIの要素にフォーカスを戻す
-        // ここでは一旦、Play/Pauseボタンにフォーカスを戻す例
-        const playPauseBtn = document.getElementById('playPauseBtn');
-        if (playPauseBtn) {
-            setFocus(focusableElements.indexOf(playPauseBtn));
-        }
-    } else {
-        // 何も閉じなかった場合、別の戻る動作 (例: ブラウザの履歴を戻る、はWeb Audio APIでは推奨されないが...)
-        // 現状では、何も開いていない場合は何もしないのが安全
-        console.log("戻る操作: 開いているパネルやモーダルはありません。");
-    }
+    console.log("戻る操作: 開いているパネルやモーダルはありません。"); // 閉じるものが何もない場合
 }
 
-
 // 初期化関数
-export function initializeGamepadInput() {
-    // ページロード時に既に接続されているゲームパッドがないか確認し、ポーリングを開始
+export function initializeGamepadHandler() {
+    // 初期ゲームパッド検出を試みる
     const gamepads = navigator.getGamepads();
-    if (gamepads.length > 0 && gamepads[0]) {
-        gamepad = gamepads[0];
-        console.log("初期ゲームパッド検出:", gamepad.id);
+    for (let i = 0; i < gamepads.length; i++) {
+        if (gamepads[i] && gamepads[i].connected) {
+            gamepad = gamepads[i];
+            console.log("初期ゲームパッド検出:", gamepad.id);
+            break;
+        }
+    }
+    // ゲームパッドが検出されたらポーリングを開始
+    if (gamepad) {
         pollGamepads();
     }
-
-    // 初回ロード時にフォーカス可能な要素を更新
-    // DOMContentLoaded後、またはUIが完全にロードされた後に呼び出すのが安全
-    // main.js の initializePlayer 関数から呼び出す
+    // 初期状態でフォーカス可能な要素を更新
     updateFocusableElements();
-    if (focusableElements.length > 0) {
-        setFocus(0); // 最初の要素にフォーカス
-    }
-    // UIのパネル開閉時にも updateFocusableElements を呼び出すように main.js 側で調整が必要
 }

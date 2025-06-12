@@ -88,9 +88,7 @@ input[type="range"]:disabled::-moz-range-thumb { background: #475569; border-col
 .animate-scroll { animation-name: scroll-text; animation-timing-function: linear; animation-duration: var(--animation-duration, 10s); animation-iteration-count: 1; transform: translateX(var(--marquee-transform-x-target)); }
 @keyframes scroll-text { from { transform: translateX(0%); } to { transform: translateX(var(--marquee-transform-x-target)); } }
 .disabled-button { opacity: 0.5; cursor: not-allowed; }
-
-/* style.css */
-
+/* ゲームパッド操作時のフォーカススタイル */
 .gamepad-focused {
     outline: 2px solid #00f; /* 青い枠線でハイライト */
     outline-offset: 2px; /* 要素から少し離して表示 */

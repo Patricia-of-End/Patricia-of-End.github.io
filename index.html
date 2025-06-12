@@ -12,20 +12,21 @@
 <body class="bg-slate-900 text-slate-200 flex-container-for-player">
     <canvas id="visualizerCanvas"></canvas>
 
-    <div class="player-container bg-slate-800 shadow-xl rounded-lg p-6 md:p-8 w-full max-w-2xl relative z-10">
+    <div id="player-container" class="player-container bg-slate-800 shadow-xl rounded-lg p-6 md:p-8 w-full max-w-2xl relative z-10">
         <header class="mb-6 text-center">
             <h1 class="text-3xl font-bold text-sky-400">ローカルメディアプレイヤー</h1>
+            <p id="deviceInfoDisplay" class="text-sm text-slate-400 mt-1">再生デバイス: 検出中...</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 items-start">
             <div class="md:col-span-1 flex flex-col justify-start items-center">
                 <img id="albumArt" src="https://placehold.co/300x300/e0e0e0/757575?text=Album+Art" alt="アルバムアート" class="w-48 h-48 md:w-full md:h-auto object-cover rounded-lg shadow-md mb-1 hidden cursor-pointer">
                 <img id="albumArtPlaceholder" src="https://placehold.co/300x300/666/ccc?text=No+Art" alt="アルバムアートなし" class="w-48 h-48 md:w-full md:h-auto object-cover rounded-lg shadow-md mb-1">
-                <div id="fileInfo" class="text-xs text-slate-400 w-full text-center mt-1 space-y-0">
-                    <div><span class="font-medium text-slate-500">形式:</span> <span id="fileType" class="text-sky-300">N/A</span></div>
-                    <div><span class="font-medium text-slate-500">サンプリングレート:</span> <span id="sampleRate" class="text-sky-300">N/A</span></div>
-                    <div><span class="font-medium text-slate-500">ビットレート:</span> <span id="bitRate" class="text-sky-300">N/A</span></div>
-                    <div><span class="font-medium text-slate-500">ファイルサイズ:</span> <span id="fileSize" class="text-sky-300">N/A</span></div>
+                
+                <div class="text-center mt-4">
+                    <button id="openDetailsModalBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition duration-150 ease-in-out">
+                        詳細情報
+                    </button>
                 </div>
             </div>
 
@@ -145,7 +146,7 @@
     
     <div id="vocalCutPanel" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 hidden">
         <div class="vocal-cut-panel-content bg-slate-800 p-8 rounded-lg shadow-2xl relative w-full max-w-xs mx-4">
-            <button id="closeVocalCutBtn" class="absolute top-2 right-2 p-1 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition"><svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            <button id="closeVocalCutBtn" class="absolute top-2 right-2 p-1 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition"><svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.525 9.525a.75.75 0 011.06 0L12 10.94l1.415-1.415a.75.75 0 111.06 1.06L13.06 12l1.415 1.415a.75.75 0 11-1.06 1.06L12 13.06l-1.415 1.415a.75.75 0 01-1.06-1.06L10.94 12 9.525 10.585a.75.75 0 010-1.06z" /></svg></button>
             <h3 class="text-xl font-semibold text-slate-200 mb-6 text-center">ボーカルカット</h3>
             <div class="flex items-center justify-center">
                 <label for="vocalCutToggle" class="flex items-center cursor-pointer">
@@ -172,6 +173,23 @@
         </div>
     </div>
     
+    <div id="fileDetailsModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="file-details-panel-content bg-slate-800 p-8 rounded-lg shadow-2xl relative w-full max-w-md mx-4">
+            <button id="closeFileDetailsModalBtn" class="absolute top-2 right-2 p-1 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition"><svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            
+            <h3 class="text-xl font-semibold text-slate-200 mb-6 text-center">ファイル詳細情報</h3>
+            
+            <div id="fileInfoDisplay" class="text-sm text-slate-400 w-full text-left space-y-2">
+                <div><span class="font-medium text-slate-300">形式:</span> <span id="fileTypeDisplay" class="text-sky-300">N/A</span></div>
+                <div><span class="font-medium text-slate-300">サンプリングレート (Ctx):</span> <span id="sampleRateDisplay" class="text-sky-300">N/A</span></div>
+                <div><span class="font-medium text-slate-300">サンプリングレート (File):</span> <span id="fileSampleRateDisplay" class="text-sky-300">N/A</span></div>
+                <div><span class="font-medium text-slate-300">ビットレート:</span> <span id="bitRateDisplay" class="text-sky-300">N/A</span></div>
+                <div><span class="font-medium text-slate-300">ビット深度:</span> <span id="bitDepthDisplay" class="text-sky-300">N/A</span></div>
+                <div><span class="font-medium text-slate-300">チャンネル:</span> <span id="fileChannelsDisplay" class="text-sky-300">N/A</span></div>
+                <div><span class="font-medium text-slate-300">ファイルサイズ:</span> <span id="fileSizeDisplay" class="text-sky-300">N/A</span></div>
+            </div>
+        </div>
+    </div>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

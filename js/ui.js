@@ -1,211 +1,263 @@
 // js/ui.js
-import * as dom from './domElements.js';
-import { formatTime, formatFileSize } from './utils.js';
 
-const marqueeTimeouts = new Map();
-const marqueeAnimationEndListeners = new Map();
+import * as dom from './domElements.js'; // DOM要素を扱うモジュールをインポート
+import { formatFileSize, formatTime } from './utils.js'; // ファイルサイズと時間フォーマットのユーティリティ関数をインポート
 
+/**
+ * トラックのメタデータ（タイトル、アーティスト、アルバム、アルバムアート）をUIに表示します。
+ * @param {object} tags - jsmediatagsから取得したメタデータタグオブジェクト。
+ */
 export function displayMetadata(tags) {
-    const titleTextEl = dom.trackTitleContainerEl.querySelector('.marquee-child');
-    const artistTextEl = dom.trackArtistContainerEl.querySelector('.marquee-child');
-    const albumTextEl = dom.trackAlbumContainerEl.querySelector('.marquee-child');
+    // 各テキスト要素にコンテンツを設定（タイトル、アーティスト、アルバム）
+    dom.trackTitle.querySelector('.marquee-child').textContent = tags.title || 'タイトル不明';
+    dom.trackArtist.querySelector('.marquee-child').textContent = tags.artist || 'アーティスト不明';
+    dom.trackAlbum.querySelector('.marquee-child').textContent = tags.album || 'アルバム不明';
 
-    titleTextEl.textContent = tags.title || 'タイトル不明';
-    artistTextEl.textContent = tags.artist || 'アーティスト不明';
-    albumTextEl.textContent = tags.album || 'アルバム不明';
-    dom.trackTitleContainerEl.title = tags.title || 'タイトル不明';
-    dom.trackArtistContainerEl.title = tags.artist || 'アーティスト不明';
-    dom.trackAlbumContainerEl.title = tags.album || 'アルバム不明';
-
-    checkAndApplyMarquee(dom.trackTitleContainerEl, titleTextEl);
-    checkAndApplyMarquee(dom.trackArtistContainerEl, artistTextEl);
-    checkAndApplyMarquee(dom.trackAlbumContainerEl, albumTextEl);
-
+    // アルバムアートの表示
     if (tags.picture) {
-        dom.albumArtPlaceholderEl.classList.add('hidden');
-        dom.albumArtEl.classList.remove('hidden');
-        const { data, format } = tags.picture;
+        const image = tags.picture;
         let base64String = "";
-        for (let i = 0; i < data.length; i++) base64String += String.fromCharCode(data[i]);
-        dom.albumArtEl.src = `data:${format};base64,${window.btoa(base64String)}`;
+        // 画像データをBase64文字列に変換
+        for (let i = 0; i < image.data.length; i++) {
+            base64String += String.fromCharCode(image.data[i]);
+        }
+        const imageUrl = `data:${image.format};base64,${btoa(base64String)}`; // データURLを作成
+        dom.albumArt.src = imageUrl; // アルバムアート画像要素のsrcを設定
+        dom.albumArt.classList.remove('hidden'); // アルバムアートを表示
+        dom.albumArtPlaceholder.classList.add('hidden'); // プレースホルダーを非表示
     } else {
-        resetAlbumArt(); // アルバムアートがない場合はプレースホルダー表示
+        dom.albumArt.classList.add('hidden'); // アルバムアートを非表示
+        dom.albumArtPlaceholder.classList.remove('hidden'); // プレースホルダーを表示
+        // デフォルトのプレースホルダー画像をセット (テキストもURLエンコード済み)
+        dom.albumArt.src = "https://placehold.co/300x300/e0e0e0/757570?text=Album+Art";
+    }
+
+    // 各marquee要素のスクロールアニメーションをリセット
+    resetMarquee(dom.trackTitle);
+    resetMarquee(dom.trackArtist);
+    resetMarquee(dom.trackAlbum);
+}
+
+/**
+ * マーカー要素（テキストがスクロールする要素）のアニメーションをリセットし、初期状態に戻します。
+ * @param {HTMLElement} element - marquee-childクラスを含む親要素。
+ */
+function resetMarquee(element) {
+    const child = element.querySelector('.marquee-child');
+    if (child) {
+        child.style.transform = 'translateX(0)'; // 位置をリセット
+        child.style.animation = 'none'; // アニメーションを停止
+        // 再度アニメーションをトリガーするためにreflowを強制 (CSSアニメーションのトリック)
+        child.offsetHeight;
+        child.style.animation = ''; // アニメーションを再開
     }
 }
 
-export function checkAndApplyMarquee(parentElement, textElement) {
-    const existingListener = marqueeAnimationEndListeners.get(textElement);
-    if (existingListener) {
-        textElement.removeEventListener('animationend', existingListener);
-        marqueeAnimationEndListeners.delete(textElement);
+/**
+ * メタデータ表示領域を初期状態に戻します（「曲名未選択」など）。
+ */
+export function initialMetadataDisplay() { // export されています
+    dom.trackTitle.querySelector('.marquee-child').textContent = '曲名未選択';
+    dom.trackArtist.querySelector('.marquee-child').textContent = 'アーティスト不明';
+    dom.trackAlbum.querySelector('.marquee-child').textContent = 'アルバム不明';
+    dom.albumArt.classList.add('hidden'); // アルバムアートを非表示
+    dom.albumArtPlaceholder.classList.remove('hidden'); // プレースホルダーを表示
+    // デフォルトのプレースホルダー画像をセット (テキストもURLエンコード済み)
+    dom.albumArt.src = "https://placehold.co/300x300/e0e0e0/757570?text=Album+Art";
+
+    resetMarquee(dom.trackTitle); // マーカーをリセット
+    resetMarquee(dom.trackArtist);
+    resetMarquee(dom.trackAlbum);
+}
+
+/**
+ * アルバムアート表示を初期状態（プレースホルダー）に戻します。
+ */
+export function resetAlbumArt() {
+    dom.albumArt.classList.add('hidden'); // アルバムアートを非表示
+    dom.albumArtPlaceholder.classList.remove('hidden'); // プレースホルダーを表示
+    // デフォルトのプレースホルダー画像をセット (テキストもURLエンコード済み)
+    dom.albumArt.src = "https://placehold.co/300x300/e0e0e0/757570?text=Album+Art";
+}
+
+/**
+ * 再生時間と総時間の表示を更新します。
+ * @param {number} currentTime - 現在の再生時間（秒）。
+ * @param {number} duration - オーディオの総時間（秒）。
+ */
+export function updateTimeDisplay(currentTime, duration) {
+    dom.timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`; // 時間表示を更新
+    if (dom.seekBar) {
+        dom.seekBar.value = currentTime; // シークバーの現在値を更新
+        dom.seekBar.max = duration; // シークバーの最大値を更新
     }
-    if (marqueeTimeouts.has(textElement)) {
-        clearTimeout(marqueeTimeouts.get(textElement));
-        marqueeTimeouts.delete(textElement);
+}
+
+/**
+ * オーディオプレーヤーの現在の状態に基づいて時間表示とシークバーを更新します。
+ * @param {HTMLAudioElement} audioPlayer - 現在再生中のオーディオプレーヤー要素。
+ */
+export function updateTimeDisplayOnPlayer(audioPlayer) {
+    if (audioPlayer) {
+        const currentTime = audioPlayer.currentTime;
+        const duration = audioPlayer.duration;
+        dom.timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`; // 時間表示を更新
+        if (dom.seekBar) {
+            dom.seekBar.value = currentTime; // シークバーの現在値を更新
+            if (isFinite(duration) && duration > 0) {
+                dom.seekBar.max = duration; // 総時間が有効な場合、シークバーの最大値を設定
+            } else {
+                dom.seekBar.max = 0; // Durationが不正な場合はシークバーを無効にする
+            }
+        }
+    } else {
+        dom.timeDisplay.textContent = '0:00 / 0:00'; // オーディオプレーヤーがない場合は初期表示
+        if (dom.seekBar) dom.seekBar.value = 0; // シークバーをリセット
     }
+}
 
-    textElement.classList.remove('start-scroll-setup', 'animate-scroll');
-    parentElement.style.textOverflow = 'ellipsis';
-    textElement.style.removeProperty('--animation-duration');
-    textElement.style.removeProperty('--marquee-transform-x-target');
-    textElement.style.paddingLeft = '0';
-    textElement.style.transform = 'translateX(0px)';
 
-    requestAnimationFrame(() => {
-        // 要素が非表示の場合は何もしない
-        if (parentElement.offsetParent === null) return;
+/**
+ * ファイルの詳細情報（タイプ、サンプリングレート、ビットレート、ビット深度、チャンネル数、ファイルサイズ）を
+ * モーダル内のUI要素に表示します。
+ * @param {File} file - 選択されたファイルオブジェクト。
+ * @param {number|null} audioDuration - オーディオの総時間（秒）。
+ * @param {number|null} audioContextSampleRate - AudioContextのサンプリングレート。
+ * @param {number|null} currentFileSize - ファイルサイズ（バイト）。
+ * @param {number|null} bitRateValue - ビットレート（kbps）。
+ * @param {number|null} bitDepthValue - ビット深度。
+ * @param {number|null} fileSampleRateValue - ファイルから解析されたサンプリングレート。
+ * @param {number|null} fileChannelsValue - ファイルから解析されたチャンネル数。
+ */
+export function updateFileInfoDisplay(file, audioDuration, audioContextSampleRate, currentFileSize, bitRateValue, bitDepthValue, fileSampleRateValue, fileChannelsValue) {
+    console.log("[UI] updateFileInfoDisplay called with:", {currentFile: file, audioDuration: audioDuration, audioContextSampleRate: audioContextSampleRate, currentFileSize: currentFileSize, bitRateValue: bitRateValue, bitDepthValue: bitDepthValue, fileSampleRateValue: fileSampleRateValue, fileChannelsValue: fileChannelsValue});
 
-        const parentWidth = parentElement.clientWidth;
-        const textWidth = textElement.scrollWidth;
+    if (file) {
+        // ★ここから変更: モーダル内の表示要素を更新
+        dom.fileTypeDisplay.textContent = file.type || 'N/A'; // ファイルタイプを表示
+        // AudioContextのサンプリングレートを表示
+        dom.sampleRateDisplay.textContent = audioContextSampleRate && audioContextSampleRate > 0 && isFinite(audioContextSampleRate) ? `${audioContextSampleRate / 1000} kHz` : 'N/A';
+        dom.bitRateDisplay.textContent = bitRateValue ? `${bitRateValue} kbps` : 'N/A'; // ビットレートを表示
+        dom.fileSizeDisplay.textContent = currentFileSize ? formatFileSize(currentFileSize) : 'N/A'; // ファイルサイズを表示
 
-        if (textWidth > parentWidth) {
-            const startMarqueeAnimation = () => {
-                parentElement.style.textOverflow = 'clip';
-                textElement.classList.add('start-scroll-setup');
-                void textElement.offsetWidth; // Reflow to apply initial state
-                textElement.classList.add('animate-scroll');
+        // ファイルからのサンプリングレート表示 (モーダル内): 値があれば表示、なければ非表示
+        if (fileSampleRateValue && fileSampleRateValue > 0 && isFinite(fileSampleRateValue)) {
+            dom.fileSampleRateDisplay.textContent = `${fileSampleRateValue / 1000} kHz`;
+            dom.fileSampleRateDisplay.parentElement.style.display = 'block'; // 親要素を表示
+        } else {
+            dom.fileSampleRateDisplay.textContent = 'N/A';
+            dom.fileSampleRateDisplay.parentElement.style.display = 'none'; // 親要素を非表示
+        }
 
-                const computedStyle = window.getComputedStyle(textElement);
-                const fontSize = parseFloat(computedStyle.fontSize);
-                const gapWidth = Math.max(20, 2.5 * fontSize); // End gap
+        // ビット深度の表示 (モーダル内): 値があれば表示、なければ非表示
+        if (bitDepthValue) {
+            dom.bitDepthDisplay.textContent = `${bitDepthValue} bits`;
+            dom.bitDepthDisplay.parentElement.style.display = 'block'; // 親要素を表示
+        } else {
+            dom.bitDepthDisplay.textContent = 'N/A';
+            dom.bitDepthDisplay.parentElement.style.display = 'none'; // 親要素を非表示
+        }
 
-                const transformTargetX = -(parentWidth + textWidth + gapWidth);
-                textElement.style.setProperty('--marquee-transform-x-target', `${transformTargetX}px`);
+        // ファイルのチャンネル数表示 (モーダル内): 値があれば表示、なければ非表示
+        if (fileChannelsValue && fileChannelsValue > 0 && isFinite(fileChannelsValue)) {
+            dom.fileChannelsDisplay.textContent = `${fileChannelsValue} ch`;
+            dom.fileChannelsDisplay.parentElement.style.display = 'block'; // 親要素を表示
+        } else {
+            dom.fileChannelsDisplay.textContent = 'N/A';
+            dom.fileChannelsDisplay.parentElement.style.display = 'none'; // 親要素を非表示
+        }
+        // ★ここまで変更
 
-                const effectiveScrollDistance = parentWidth + textWidth + gapWidth; // Total distance to animate
-                const speed = 75; // pixels per second
-                let duration = effectiveScrollDistance / speed;
-                duration = Math.max(3, Math.min(duration, 20)); // Clamp duration
-                
-                textElement.style.setProperty('--animation-duration', `${duration}s`);
-            };
+        // 再生時間表示の更新（プレーヤーの現在時間と総時間）
+        if (audioDuration && isFinite(audioDuration)) {
+            dom.timeDisplay.textContent = `${formatTime(dom.audioPlayer.currentTime)} / ${formatTime(audioDuration)}`;
+        } else {
+            dom.timeDisplay.textContent = '0:00 / 0:00';
+        }
+    } else {
+        resetFileInfoDisplay(); // ファイルが選択されていない場合は情報表示をリセット
+    }
+}
 
-            const animationEndHandler = () => {
-                textElement.classList.remove('start-scroll-setup', 'animate-scroll');
-                textElement.style.paddingLeft = '0'; // Reset padding
-                textElement.style.transform = 'translateX(0px)'; // Reset transform
-                const loopTimeoutId = setTimeout(startMarqueeAnimation, 2000); // Delay before restart
-                marqueeTimeouts.set(textElement, loopTimeoutId);
-            };
-            
-            textElement.addEventListener('animationend', animationEndHandler);
-            marqueeAnimationEndListeners.set(textElement, animationEndHandler);
+/**
+ * ファイル詳細情報モーダル内のUI要素をリセットし、特定の情報を非表示にします。
+ */
+export function resetFileInfoDisplay() {
+    console.log("[UI] resetFileInfoDisplay called");
+    // ★ここから変更: モーダル内の表示要素をリセットし、非表示に
+    dom.fileTypeDisplay.textContent = 'N/A';
+    dom.sampleRateDisplay.textContent = 'N/A';
+    dom.fileSampleRateDisplay.textContent = 'N/A';
+    dom.fileSampleRateDisplay.parentElement.style.display = 'none'; // 親要素を非表示
+    dom.bitRateDisplay.textContent = 'N/A';
+    dom.bitDepthDisplay.textContent = 'N/A';
+    dom.bitDepthDisplay.parentElement.style.display = 'none'; // 親要素を非表示
+    dom.fileChannelsDisplay.textContent = 'N/A';
+    dom.fileChannelsDisplay.parentElement.style.display = 'none'; // 親要素を非表示
+    dom.fileSizeDisplay.textContent = 'N/A';
+    // ★ここまで変更
+}
 
-            const initialTimeoutId = setTimeout(startMarqueeAnimation, 2000); // Initial delay
-            marqueeTimeouts.set(textElement, initialTimeoutId);
+/**
+ * オーディオコントロール（再生/一時停止ボタン、シークバーなど）の有効/無効を切り替えます。
+ * @param {boolean} enabled - コントロールを有効にする場合は true、無効にする場合は false。
+ */
+export function setAudioControlsEnabled(enabled) {
+    // 各コントロール要素のdisabledプロパティを設定
+    if (dom.playPauseBtn) dom.playPauseBtn.disabled = !enabled;
+    if (dom.seekBar) dom.seekBar.disabled = !enabled;
+    if (dom.volumeBar) dom.volumeBar.disabled = !enabled;
+    if (dom.clearLrcBtn) dom.clearLrcBtn.disabled = !enabled;
+
+    // パネルトグルボタンも制御
+    if (dom.toggleEqBtn) dom.toggleEqBtn.disabled = !enabled;
+    if (dom.toggleToneBtn) dom.toggleToneBtn.disabled = !enabled;
+    if (dom.toggleAmbienceBtn) dom.toggleAmbienceBtn.disabled = !enabled;
+    if (dom.toggleVocalCutBtn) dom.toggleVocalCutBtn.disabled = !enabled;
+
+    // 'disabled-button' クラスのトグル（CSSでのスタイル適用のため）
+    const controls = [
+        dom.playPauseBtn, dom.seekBar, dom.volumeBar, dom.clearLrcBtn,
+        dom.toggleEqBtn, dom.toggleToneBtn, dom.toggleAmbienceBtn, dom.toggleVocalCutBtn
+    ];
+    controls.forEach(control => {
+        if (control) {
+            if (!enabled) {
+                control.classList.add('disabled-button'); // 無効なスタイルを追加
+            } else {
+                control.classList.remove('disabled-button'); // 有効なスタイルを削除
+            }
         }
     });
 }
 
-
-export function updateTimeDisplayOnPlayer(audioPlayerElement) {
-    if (!dom.timeDisplay || !audioPlayerElement) return;
-    const currentTime = audioPlayerElement.currentTime;
-    const duration = audioPlayerElement.duration || 0; // NaNやInfinityを避ける
-    dom.timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
-}
-
+/**
+ * 再生/一時停止ボタンの視覚的な状態（アイコン）を更新します。
+ * @param {boolean} isPlaying - 現在再生中であれば true、そうでなければ false。
+ */
 export function updatePlayPauseButtonVisuals(isPlaying) {
-    if (!dom.playIcon || !dom.pauseIcon) return;
-    dom.playIcon.classList.toggle('hidden', isPlaying);
-    dom.pauseIcon.classList.toggle('hidden', !isPlaying);
-}
-
-export function setAudioControlsEnabled(enabled) {
-    if (dom.playPauseBtn) {
-        dom.playPauseBtn.disabled = !enabled;
-        dom.playPauseBtn.classList.toggle('disabled-button', !enabled);
-    }
-    if (dom.seekBar) {
-        dom.seekBar.disabled = !enabled;
-        if (!enabled) dom.seekBar.value = 0; // 無効化時にシークバーをリセット
+    if (dom.playIcon && dom.pauseIcon) {
+        if (isPlaying) {
+            dom.playIcon.classList.add('hidden'); // 再生アイコンを非表示
+            dom.pauseIcon.classList.remove('hidden'); // 一時停止アイコンを表示
+        } else {
+            dom.playIcon.classList.remove('hidden'); // 再生アイコンを表示
+            dom.pauseIcon.classList.add('hidden'); // 一時停止アイコンを非表示
+        }
     }
 }
 
+/**
+ * LRCクリアボタンの有効/無効を切り替えます。
+ * @param {boolean} enabled - ボタンを有効にする場合は true、無効にする場合は false。
+ */
 export function setClearLrcButtonEnabled(enabled) {
     if (dom.clearLrcBtn) {
-        dom.clearLrcBtn.disabled = !enabled;
-        dom.clearLrcBtn.classList.toggle('disabled-button', !enabled);
-    }
-}
-
-export function resetFileInfoDisplay() {
-    console.log('[UI] resetFileInfoDisplay called');
-    if (dom.fileTypeEl) dom.fileTypeEl.textContent = 'N/A';
-    if (dom.sampleRateEl) dom.sampleRateEl.textContent = 'N/A';
-    if (dom.bitRateEl) dom.bitRateEl.textContent = 'N/A';
-    if (dom.fileSizeEl) dom.fileSizeEl.textContent = 'N/A';
-}
-
-export function updateFileInfoDisplay(currentFile, audioDuration, audioContextSampleRate, currentFileSize) {
-    console.log('[UI] updateFileInfoDisplay called with:', { currentFile, audioDuration, audioContextSampleRate, currentFileSize });
-    // ファイル形式
-    if (dom.fileTypeEl && currentFile) {
-        const fileName = currentFile.name;
-        const extension = fileName.split('.').pop();
-        if (extension && extension !== fileName) {
-            dom.fileTypeEl.textContent = extension.toUpperCase();
-        } else if (currentFile.type && currentFile.type.trim() !== "") {
-            dom.fileTypeEl.textContent = currentFile.type.toUpperCase().replace('AUDIO/', '');
+        dom.clearLrcBtn.disabled = !enabled; // ボタンのdisabledプロパティを設定
+        if (!enabled) {
+            dom.clearLrcBtn.classList.add('disabled-button'); // 無効なスタイルを追加
         } else {
-            dom.fileTypeEl.textContent = '不明';
-        }
-    } else if (dom.fileTypeEl) {
-        dom.fileTypeEl.textContent = 'N/A';
-    }
-
-    // サンプルレート
-    console.log('[UI] updateFileInfoDisplay - Received audioContextSampleRate:', audioContextSampleRate);
-    if (dom.sampleRateEl) {
-        if (audioContextSampleRate) { // nullや0でないことを確認
-            dom.sampleRateEl.textContent = `${audioContextSampleRate / 1000} kHz (再生時)`;
-            console.log('[UI] Sample rate displayed:', dom.sampleRateEl.textContent);
-        } else {
-            console.warn('[UI] Sample rate is null, undefined or zero, not updating display from here. Current text:', dom.sampleRateEl.textContent);
-             // N/Aに戻したい場合は resetFileInfoDisplay() を呼ぶか、ここで明示的にN/Aを設定。
-             // 現状は resetFileInfoDisplay() でN/Aになるため、ここでは何もしないでおくか、
-             // もし既に有効な値が表示されていて audioContextSampleRate が null で来た場合に
-             // N/A に戻すべきか検討。安全策として N/A に戻すのもあり。
-             // dom.sampleRateEl.textContent = 'N/A';
+            dom.clearLrcBtn.classList.remove('disabled-button'); // 有効なスタイルを削除
         }
     }
-
-    // ビットレート
-    if (dom.bitRateEl) {
-        const isCurrentFileValid = !!(currentFile && typeof currentFile.size === 'number' && currentFile.size > 0);
-        const isDurationValid = !!(typeof audioDuration === 'number' && !isNaN(audioDuration) && audioDuration > 0);
-        if (isCurrentFileValid && isDurationValid) {
-            const fileSizeInBits = currentFile.size * 8;
-            const calculatedBitRate = Math.round(fileSizeInBits / audioDuration / 1000);
-            dom.bitRateEl.textContent = `${calculatedBitRate} kbps`;
-        } else {
-            dom.bitRateEl.textContent = 'N/A';
-        }
-    }
-
-    // ファイルサイズ
-    if (dom.fileSizeEl) {
-        if (currentFileSize > 0) {
-            dom.fileSizeEl.textContent = formatFileSize(currentFileSize);
-        } else if (currentFile && currentFile.size > 0) { // currentFileSizeが未更新の場合のフォールバック
-            dom.fileSizeEl.textContent = formatFileSize(currentFile.size);
-        }
-        // ここにあった不要な '*' は削除済み
-        else {
-            dom.fileSizeEl.textContent = 'N/A';
-        }
-    }
-}
-
-export function resetAlbumArt() {
-    if(dom.albumArtEl && dom.albumArtPlaceholderEl) {
-        dom.albumArtEl.classList.add('hidden');
-        dom.albumArtEl.src = ''; // srcをクリアしてメモリ解放を期待
-        dom.albumArtPlaceholderEl.classList.remove('hidden');
-    }
-}
-
-export function initialMetadataDisplay() {
-    const initialTags = { title: '曲名未選択', artist: 'アーティスト不明', album: 'アルバム不明' };
-    displayMetadata(initialTags); // これによりマーキーも初期化される
 }
